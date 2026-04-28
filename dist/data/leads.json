@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1",
+    "company": "BrightPath Health",
+    "contact": "Noah Williams",
+    "email": "noah@brightpath.com",
+    "value": 88000,
+    "stage": "Qualified",
+    "segment": "Enterprise",
+    "followUpDate": "2026-05-01"
+  },
+  {
+    "id": "2",
+    "company": "Nova Retail Group",
+    "contact": "Aarav Sharma",
+    "email": "aarav@novaretail.com",
+    "value": 22000,
+    "stage": "New",
+    "segment": "Mid-Market",
+    "followUpDate": "2026-04-29"
+  },
+  {
+    "id": "3",
+    "company": "Zenith Logistics",
+    "contact": "Mia Johnson",
+    "email": "mia@zenithlogistics.com",
+    "value": 64000,
+    "stage": "Contacted",
+    "segment": "Enterprise",
+    "followUpDate": "2026-04-28"
+  },
+  {
+    "id": "4",
+    "company": "CloudPeak SaaS",
+    "contact": "Saanvi Patel",
+    "email": "saanvi@cloudpeak.io",
+    "value": 17000,
+    "stage": "Contacted",
+    "segment": "Startup",
+    "followUpDate": "2026-04-30"
+  },
+  {
+    "id": "5",
+    "company": "BlueRiver Finance",
+    "contact": "Liam Brown",
+    "email": "liam@blueriverfinance.com",
+    "value": 51000,
+    "stage": "Closed",
+    "segment": "Mid-Market",
+    "followUpDate": "2026-04-27"
+  },
+  {
+    "id": "6",
+    "company": "Atlas Manufacturing",
+    "contact": "Emma Davis",
+    "email": "emma@atlasmfg.com",
+    "value": 29000,
+    "stage": "Qualified",
+    "segment": "SMB",
+    "followUpDate": "2026-05-03"
+  }
+]

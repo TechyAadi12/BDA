@@ -1,69 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import CopilotButton from "./components/ai/CopilotButton";
+import CopilotDrawer from "./components/ai/CopilotDrawer";
 
 const STAGES = ["New", "Contacted", "Qualified", "Closed"];
-
-const initialLeads = [
-  {
-    id: "L-001",
-    name: "Nova Retail Group",
-    contact: "Aarav Sharma",
-    email: "aarav@novaretail.com",
-    stage: "New",
-    segment: "Mid-Market",
-    value: 22000,
-    followUpDate: "2026-04-29",
-  },
-  {
-    id: "L-002",
-    name: "Zenith Logistics",
-    contact: "Mia Johnson",
-    email: "mia@zenithlogistics.com",
-    stage: "Contacted",
-    segment: "Enterprise",
-    value: 64000,
-    followUpDate: "2026-04-28",
-  },
-  {
-    id: "L-003",
-    name: "BrightPath Health",
-    contact: "Noah Williams",
-    email: "noah@brightpathhealth.org",
-    stage: "Qualified",
-    segment: "Enterprise",
-    value: 88000,
-    followUpDate: "2026-05-01",
-  },
-  {
-    id: "L-004",
-    name: "CloudPeak SaaS",
-    contact: "Saanvi Patel",
-    email: "saanvi@cloudpeak.io",
-    stage: "Contacted",
-    segment: "Startup",
-    value: 17000,
-    followUpDate: "2026-04-30",
-  },
-  {
-    id: "L-005",
-    name: "BlueRiver Finance",
-    contact: "Liam Brown",
-    email: "liam@blueriverfinance.com",
-    stage: "Closed",
-    segment: "Mid-Market",
-    value: 51000,
-    followUpDate: "2026-04-27",
-  },
-  {
-    id: "L-006",
-    name: "Atlas Manufacturing",
-    contact: "Emma Davis",
-    email: "emma@atlasmfg.com",
-    stage: "Qualified",
-    segment: "SMB",
-    value: 29000,
-    followUpDate: "2026-05-03",
-  },
-];
 
 const monthlyRevenue = [
   { month: "Jan", amount: 34000 },
@@ -89,16 +29,62 @@ function daysUntil(dateString) {
   return Math.round(diff / 86400000);
 }
 
+function timeStamp() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function App() {
-  const [leads, setLeads] = useState(initialLeads);
+  const [leads, setLeads] = useState([]);
   const [form, setForm] = useState({
-    name: "",
+    company: "",
     contact: "",
     email: "",
     segment: "SMB",
     value: "",
     followUpDate: "",
   });
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      role: "ai",
+      text: "I can help you prioritize follow-ups, analyze pipeline health, and draft outreach.",
+      timestamp: timeStamp(),
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const messageContainerRef = useRef(null);
+
+  useEffect(() => {
+    async function loadLeads() {
+      try {
+        const response = await fetch("/data/leads.json");
+        if (!response.ok) {
+          throw new Error("Failed to load local leads data");
+        }
+        const data = await response.json();
+        setLeads(data);
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            text: "I could not load local lead data. Please verify /data/leads.json.",
+            timestamp: timeStamp(),
+          },
+        ]);
+      }
+    }
+
+    loadLeads();
+  }, []);
+
+  useEffect(() => {
+    if (!copilotOpen || !messageContainerRef.current) {
+      return;
+    }
+    messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
+  }, [messages, loading, copilotOpen]);
 
   const totals = useMemo(() => {
     const byStage = STAGES.reduce((acc, stage) => {
@@ -151,13 +137,13 @@ export default function App() {
 
   function addLead(event) {
     event.preventDefault();
-    if (!form.name || !form.contact || !form.email || !form.value || !form.followUpDate) {
+    if (!form.company || !form.contact || !form.email || !form.value || !form.followUpDate) {
       return;
     }
 
     const newLead = {
-      id: `L-${String(leads.length + 1).padStart(3, "0")}`,
-      name: form.name,
+      id: String(leads.length + 1),
+      company: form.company,
       contact: form.contact,
       email: form.email,
       stage: "New",
@@ -168,7 +154,7 @@ export default function App() {
 
     setLeads((prev) => [newLead, ...prev]);
     setForm({
-      name: "",
+      company: "",
       contact: "",
       email: "",
       segment: "SMB",
@@ -177,11 +163,88 @@ export default function App() {
     });
   }
 
+  async function sendMessage(outboundMessage) {
+    const trimmed = outboundMessage.trim();
+    if (!trimmed || loading) {
+      return;
+    }
+
+    const userMessage = { role: "user", text: trimmed, timestamp: timeStamp() };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/copilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: trimmed,
+          leads,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Copilot API request failed");
+      }
+
+      const data = await response.json();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: data.reply || "I analyzed your leads and can help with next actions.",
+          timestamp: timeStamp(),
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "I could not reach /api/copilot. Please make sure the backend endpoint is running.",
+          timestamp: timeStamp(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const companyNames = useMemo(() => leads.map((lead) => lead.company), [leads]);
   const maxRevenue = Math.max(...monthlyRevenue.map((item) => item.amount), 1);
+  const copilotLayer =
+    typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <CopilotButton open={copilotOpen} onClick={() => setCopilotOpen((prev) => !prev)} />
+            <CopilotDrawer
+              open={copilotOpen}
+              input={input}
+              loading={loading}
+              messages={messages}
+              onInputChange={(event) => setInput(event.target.value)}
+              onPromptSelect={sendMessage}
+              onClose={() => setCopilotOpen(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  sendMessage(input);
+                }
+              }}
+              onSend={() => sendMessage(input)}
+              messagesRef={messageContainerRef}
+              companies={companyNames}
+            />
+          </>,
+          document.body
+        )
+      : null;
 
   return (
-    <main className="app">
-      <header className="topbar">
+    <>
+      <main className="app">
+        <header className="topbar">
         <div>
           <p className="eyebrow">Sales Forge</p>
           <h1>Sales CRM Dashboard</h1>
@@ -212,7 +275,7 @@ export default function App() {
         <article className="panel panel-wide">
           <div className="panel-title-row">
             <h3>Lead Tracking Pipeline</h3>
-            <p>Move each lead through New → Contacted → Qualified → Closed</p>
+            <p>Move each lead through New -&gt; Contacted -&gt; Qualified -&gt; Closed</p>
           </div>
           <div className="pipeline">
             {STAGES.map((stage, stageIndex) => (
@@ -224,7 +287,7 @@ export default function App() {
                 <div className="lead-list">
                   {totals.byStage[stage].map((lead) => (
                     <article className="lead-card" key={lead.id}>
-                      <p className="lead-company">{lead.name}</p>
+                      <p className="lead-company">{lead.company}</p>
                       <p className="lead-contact">{lead.contact}</p>
                       <p className="lead-meta">{currency(lead.value)}</p>
                       <p className="lead-meta">{lead.segment}</p>
@@ -295,7 +358,7 @@ export default function App() {
             {reminders.map((lead) => (
               <div className="reminder-item" key={lead.id}>
                 <div>
-                  <p className="lead-company">{lead.name}</p>
+                  <p className="lead-company">{lead.company}</p>
                   <p className="lead-contact">{lead.contact}</p>
                 </div>
                 <span className={`badge ${lead.dueIn < 0 ? "badge-alert" : "badge-ok"}`}>
@@ -318,8 +381,8 @@ export default function App() {
         </div>
         <form className="lead-form" onSubmit={addLead}>
           <input
-            name="name"
-            value={form.name}
+            name="company"
+            value={form.company}
             onChange={updateForm}
             placeholder="Company name"
             required
@@ -366,6 +429,10 @@ export default function App() {
           </button>
         </form>
       </section>
-    </main>
+
+      </main>
+      {copilotLayer}
+    </>
   );
 }
+
